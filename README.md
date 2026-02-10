@@ -1,6 +1,6 @@
 # advent25
 
-- my attempts at AoC2025. all my own work (Python 3).
+- my attempts at aoc25. all my own work (Python 3).
 - code is uploaded as-submitted; hopefully the quality accretes over time.
 - biggest lessons so far: 1) get to know the data; 2) edge cases 3) time complexity
 
