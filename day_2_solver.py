@@ -68,8 +68,7 @@ class Solver2():
         while True:
             if (input_int % (10**digit_counter)) == input_int:
                 return digit_counter
-            else:
-                digit_counter += 1
+            digit_counter += 1
 
     def retrieve_digits(self,
                         number: int,
@@ -151,7 +150,7 @@ class Solver2():
         output = 0
 
         # error check argument
-        if (len(numbers) < 1):
+        if len(numbers) < 1:
             return 0
 
         # stitch together
@@ -186,9 +185,11 @@ class Solver2():
 
         # for each set of digit lengths (i), set min / max of the domain
         for i in digit_lengths:
+
             # e.g. if start=3, floor at 10
             domain_start = 10**(i-1) if self.digit_count(start) != i \
                 else start
+
             # e.g. if end=1,000,000, cap at 999,999
             domain_end = 10**(i)-1 if self.digit_count(end) != i \
                 else end
@@ -198,19 +199,20 @@ class Solver2():
 
             # cut the ID into between [2,i] pieces (j)
             for j in range(2, i+1):
+
                 if i % j == 0:  # if evenly cut
 
                     # digit size of each piece
                     piece_size = int(i/j)
-                    # number of pieces... just j but helps to work in english
+                    # number of pieces... just j, but helps to work in english
                     num_pieces = int(j)
 
+                    # break into single digits w/ iterator k
+                    # (note: piece size = i/j still here!)
                     for k in range(i):
-                        # break into single digits w/ iterator k
-                        # (note: piece size = i/j still here!)
                         pieces.append(
-                            # e.g. 998 -> [9, 9, 8]
                             self.retrieve_digits(current_id, i - k)
+                            # e.g. 998 -> [9, 9, 8]
                         )
 
                     # plan of attack:
@@ -219,35 +221,36 @@ class Solver2():
                     #   subject to range constraints
                     while current_id <= domain_end:
 
-                        # if first piece is larger than next piece
-                        if self.stitch(pieces[:piece_size]) >= \
-                                self.stitch(pieces[piece_size:piece_size*2]):
+                        # make a new invalid ID...
+                        current_id = self.stitch(
+                                [y for x, y in enumerate(pieces)
+                                 if (x % piece_size) == x] * num_pieces
+                                )
 
-                            # make an invalid ID based on repetition of
-                            # first piece
-                            current_id = self.stitch(
-                                [
-                                    y for x, y in enumerate(pieces)
-                                    if (x % piece_size) == x
-                                ] * num_pieces
-                            )
-                            # add to output, given still in range
-                            if (current_id >= domain_start) & \
-                                    (current_id <= domain_end):
-                                output_list.append(current_id)
+                        # if first piece is larger than next piece
+                        # and ID is in range
+                        if (
+                                self.stitch(pieces[:piece_size]) >=
+                                self.stitch(pieces[piece_size:piece_size*2])
+                                ) & \
+                            (
+                                (current_id >= domain_start) &
+                                (current_id <= domain_end)
+                                ):
+
+                            # add to output
+                            output_list.append(current_id)
 
                         # else increment first piece
                         pieces[piece_size - 1] += 1
 
                         # then make a new invalid ID...
                         current_id = self.stitch(
-                                [
-                                    y for x, y in enumerate(pieces)
-                                    if (x % piece_size) == x
-                                    ] * num_pieces
-                            )
+                                [y for x, y in enumerate(pieces)
+                                 if (x % piece_size) == x] * num_pieces
+                                )
 
-                        # then store updated ID in pieces again
+                        # and store updated ID in pieces again
                         pieces.clear()
                         for k in range(i):
                             pieces.append(
@@ -357,7 +360,7 @@ class Solver2():
 # ===== PART TWO SOLVE =====
 # =============================================================================
 
-    def solve_part_two(self, start: int = 50) -> int:
+    def solve_part_two(self) -> int:
         """Solve of Part 2.
 
         Return sum of invalid IDs: IDs with some sequence of digits repeated \
