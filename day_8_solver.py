@@ -57,6 +57,24 @@ class Solver8():
             for j in range(self.data.shape[1]):
                 self.jbox[i, j] = int(self.data[i][j])
 
+        # ===== POPULATE DISTANCE MATRIX =====
+
+        # initialise euclidean distance matrix
+        self.distance_matrix = np.zeros(
+            (len(self.jbox), len(self.jbox))
+        )
+
+        # opting for upper diagonal matrix, so that convention can be:
+        # distance between matrix 1 + matrix 2 is [r, c]
+
+        for j in enumerate(self.jbox):  # columns
+            for i in range(j[0]):  # rows, only upper diag
+                # calculate the euclidean distance and populate
+                self.distance_matrix[i, j[0]] = self.eucl_nd(
+                    self.jbox[i],
+                    self.jbox[j[0]]
+                    )
+
 # =============================================================================
 # ===== HELPERS =====
 # =============================================================================
@@ -139,7 +157,6 @@ class Solver8():
 # =============================================================================
 
     def build_circuits(self,
-                       jbox_coordinates: np.array,
                        n_shortest_conns: int = 1000
                        ):
         """Calculate jbox circuit sizes, given an input of jbox coordinates.
@@ -151,7 +168,7 @@ class Solver8():
         # total possible number of connections
         # nCr (combinatorics): len(jbox) choose 2 = total number of pairs
         possible_conns = int(
-            (len(jbox_coordinates) * (len(jbox_coordinates) - 1)) / 2
+            (len(self.jbox) * (len(self.jbox) - 1)) / 2
             )
 
         # cap / floor size of n
@@ -160,29 +177,11 @@ class Solver8():
         elif n_shortest_conns < 1:
             n_shortest_conns = 1
 
-        # initialise euclidean distance matrix
-        self.distance_matrix = np.zeros(
-            (len(jbox_coordinates), len(jbox_coordinates))
-        )
-
         # initialise circuits (list of sets)
         self.circuits.clear()
 
-        # initialise working dict of circuits (dict of sets)
-        circuit_curr = {}
-
-        # ===== POPULATE DISTANCE MATRIX =====
-
-        # opting for upper diagonal matrix, so that convention can be:
-        # distance between matrix 1 + matrix 2 is [r, c]
-
-        for j in enumerate(jbox_coordinates):  # columns
-            for i in range(j[0]):  # rows, only upper diag
-                # calculate the euclidean distance and populate
-                self.distance_matrix[i, j[0]] = self.eucl_nd(
-                    jbox_coordinates[i],
-                    jbox_coordinates[j[0]]
-                    )
+        # initialise working dict of circuits (dict of sets of jboxes)
+        circuit_made = {}
 
         # ===== ESTABLISH CONNECTIONS TO MAKE (N SHORTEST) =====
 
@@ -201,49 +200,48 @@ class Solver8():
         # matrix i.e. first jbox index < second jbox index, and any jbox index
         # only has higher value jboxes in its set
 
-        # initialise circuits...
-        # ...firstly, with single, unconnected jboxes
-        for i in enumerate(jbox_coordinates):
-            circuit_curr[i[0]] = {i[0]}
+        # populate circuits made
 
-        # ...then loop through connections, adding to dictionary...
+        # ...firstly, with single, unconnected jboxes
+        for i in enumerate(self.jbox):
+            circuit_made[i[0]] = {i[0]}
+
+        # ...then loop through connections, adding to made circuits...
         for j in self.connections:
             # for each connection, add second jbox to set indexed by first jbox
-            circuit_curr[j[0]].add(j[0])
-            circuit_curr[j[0]].add(j[1])
+            circuit_made[j[0]].add(j[0])
+            circuit_made[j[0]].add(j[1])
 
         # ...finally, combine related circuits...
 
         # traverses each circuit from highest index descending, checking for a
         # lower indexed circuit for mutual jboxes
-        for circ_1 in range(len(circuit_curr) - 1, 0, -1):  # descending
+        for circ_1 in range(len(circuit_made) - 1, 0, -1):  # descending
             # all indices lower than current circuit
             for circ_2 in range(circ_1):
                 # if there is a mutual jbox between circuits...
                 if len(
-                        circuit_curr[circ_1].intersection(
-                            circuit_curr[circ_2]
+                        circuit_made[circ_1].intersection(
+                            circuit_made[circ_2]
                             )
                         ) != 0:
                     # ... combine them in the latter circuit...
-                    circuit_curr[circ_2] = circuit_curr[circ_1].union(
-                        circuit_curr[circ_2]
+                    circuit_made[circ_2] = circuit_made[circ_1].union(
+                        circuit_made[circ_2]
                         )
                     # ... and delete the former circuit
-                    circuit_curr[circ_1].clear()
+                    circuit_made[circ_1].clear()
                     # next circuit
                     break
 
+        # final made circuits are list of sets of jbox indices
+        self.circuits = list(circuit_made.values())
         # sort circuits by descending circuit length
-        self.circuits = list(circuit_curr.values())
-
         self.circuits.sort(
             key=len, reverse=True
             )
 
-    def build_one_circuit(self,
-                          jbox_coordinates: np.array
-                          ):
+    def build_one_circuit(self):
         """Construct unifying jbox circuit, given an input of jbox coordinates.
 
         Circuits built on increasing euclidean distance between components.
@@ -253,40 +251,22 @@ class Solver8():
         # total possible number of connections
         # nCr (combinatorics): len(jbox) choose 2 = total number of pairs
         possible_conns = int(
-            (len(jbox_coordinates) * (len(jbox_coordinates) - 1)) / 2
+            (len(self.jbox) * (len(self.jbox) - 1)) / 2
             )
-
-        # initialise euclidean distance matrix
-        self.distance_matrix = np.zeros(
-            (len(jbox_coordinates), len(jbox_coordinates))
-        )
 
         # initialise loop conditions / parameters
         circuits_amended = 0
-        current_conns = 0
+        made_conns = 0
 
         # initialise circuits (list of sets)
         self.circuits.clear()
 
         # initialise working dict of circuits (dict of sets)
-        circuit_curr = {}
+        circuit_made = {}
         circuit_wait = {}
 
-        # initialise working list of related connections
-        related_conns = []
-
-        # ===== POPULATE DISTANCE MATRIX =====
-
-        # opting for upper diagonal matrix, so that convention can be:
-        # distance between matrix 1 + matrix 2 is [r, c]
-
-        for j in enumerate(jbox_coordinates):  # columns
-            for i in range(j[0]):  # rows, only upper diag
-                # calculate the euclidean distance and populate
-                self.distance_matrix[i, j[0]] = self.eucl_nd(
-                    jbox_coordinates[i],
-                    jbox_coordinates[j[0]]
-                    )
+        # initialise working list of related jboes
+        related_jboxes = []
 
         # ===== ESTABLISH ALL POSSIBLE CONNECTIONS =====
 
@@ -300,7 +280,9 @@ class Solver8():
         # ===== MAKE CONNECTIONS =====
 
         # premise is to build a circuit with incrementally more connections \
-        # until one unifying circuit is built
+        # until one unifying circuit is built. This is done by traversing \
+        # all possible connections, and connecting to circuits already made, \
+        # or putting them in a waiting list to be revisited.
 
         # Note: To avoid O(n^2) time complexity, using more space (2 dicts).
         # also, specifically dicts because of O(1) 'in' time complexity.
@@ -308,41 +290,48 @@ class Solver8():
         # begin loop in which a single new connection is added into circuits
         # each epoch
 
-        # add first connection to dict to seed the loop
-        for i in self.connections[current_conns]:
-            circuit_curr[i] = {current_conns}  # value is index of connection
+        # add first connection (made_conns = 0) to dict to seed the loop
+        # first bilateral connection made
+        # keys are indices of each jbox, value is index of connection
+
+        circuit_made = {
+            i: {made_conns} for i in self.connections[made_conns]
+            }
+
         # increment connection
-        current_conns += 1
+        made_conns += 1
 
-        while True:
+        # ===== TRAVERSE POSSIBLE CONNECTIONS =====
 
-            if current_conns < possible_conns:  # limit to max connections
+        while made_conns < possible_conns:  # limit to max connections:
 
-                # compare next connection to current circuit, checking \
-                # if there is a mutual element between circuits...
-                if len(
-                        set(circuit_curr).intersection(
-                        set(self.connections[current_conns]))
-                        ) != 0:
-                    # ... if so, combine them...
-                    for i in self.connections[current_conns]:
-                        if i in circuit_curr:
-                            circuit_curr[i].add(current_conns)
-                        else:
-                            circuit_curr[i] = {current_conns}
-                else:
-                    # ... else add to circuits awaiting connection...
-                    for i in self.connections[current_conns]:
-                        if i in circuit_wait:
-                            circuit_wait[i].add(current_conns)
-                        else:
-                            circuit_wait[i] = {current_conns}
+            # compare next connection to made circuits, checking \
+            # if there is a mutual element between circuits...
+            if len(
+                    set(circuit_made).intersection(
+                        set(self.connections[made_conns])
+                        )
+                    ) != 0:
+                # ... if so, combine them...
+                for i in self.connections[made_conns]:
 
-                # increment connection
-                current_conns += 1
+                    circuit_made[i] = circuit_made[i].union({made_conns}) \
+                        if i in circuit_made else {made_conns}
+
+            else:
+                # ... else add to circuits awaiting connection...
+                for i in self.connections[made_conns]:
+
+                    circuit_wait[i] = circuit_wait[i].union({made_conns}) \
+                        if i in circuit_wait else {made_conns}
+
+            # increment connection
+            made_conns += 1
+
+            # ===== COMBINE CIRCUITS MADE & WAITING LIST =====
 
             # ...finally, check for related jboxes amongst waiting list \
-            # and current circuits...
+            # and made circuits (up to 2 degrees of separation)...
 
             while True:
 
@@ -350,63 +339,78 @@ class Solver8():
                 # at start of each loop
                 circuits_amended = 0
 
-                # traverses waiting list checking for a mutual element in \
-                # current circuit dict
-                for jbox, conn_ind in circuit_wait.items():
+                # ===== CONNECTIONS: 1 DEGREE OF SEPARATION =====
+
+                # traverse sets of connection indices for jboxes in \
+                # the waiting list that are also in made circuits
+                for conn_indices in \
+                    [
+                        conn_indices for jbox, conn_indices in
+                        circuit_wait.items() if jbox in circuit_made
+                        ]:
 
                     # break traversal in waiting list if amended
                     # -> restart
                     if circuits_amended:
                         break
 
-                    # traverse each connection index
-                    for ind in conn_ind:
+                    # ===== CONNECTIONS: 2 DEGREES OF SEPARATION =====
 
-                        # if there is a mutual jbox between circuits...
-                        if jbox in circuit_curr:
+                    # traverse each connection index in those index sets to \
+                    # find jboxes in waiting list that are related to made \
+                    # circuits by 2 degrees of separation
 
-                            # ... filter for related connections in waiting \
-                            # list...
-                            related_conns = list(
-                                    filter(
-                                        lambda x: len(
-                                            circuit_wait.get(x).intersection(
-                                                {ind}
-                                                )
-                                            ) != 0,
-                                        circuit_wait
-                                        )
-                                    )
+                    for index in conn_indices:
 
-                            # for each related connection....
-                            for i in related_conns:
-                                # ... combine them in the current circuit dict
-                                if i in circuit_curr:  # O(1)
-                                    circuit_curr[i] = circuit_curr[i].union(
-                                        circuit_wait[i]
-                                        )
-                                else:
-                                    circuit_curr[i] = circuit_wait[i]
+                        # ... filter for all jboxes in waiting \
+                        # list that contain a connection index that is \
+                        # connected to a jbox that is in made circuits; phew!
 
-                                # ... and delete the connection index in \
-                                # waiting list...
-                                circuit_wait[i].remove(ind)
+                        # related_jboxes = list(
+                        #         filter(
+                        #             lambda x: len(
+                        #                 circuit_wait.get(x).intersection(
+                        #                     {index}
+                        #                     )
+                        #                 ) != 0,
+                        #             circuit_wait
+                        #             )
+                        #         )
 
-                            # flag amendment to loop
-                            circuits_amended = 1
+                        related_jboxes = \
+                            [
+                                x for x, y in circuit_wait.items() if
+                                len(y.intersection({index})) != 0
+                                ]
 
-                            # next jbox
-                            break
+                        # for each related jbox....
+                        for i in related_jboxes:
+
+                            # ... combine with the made circuit
+                            circuit_made[i] = circuit_made[i].union(
+                                    circuit_wait[i]
+                                    ) if \
+                                i in circuit_made else circuit_wait[i]
+
+                            # ... and delete the connection index in \
+                            # waiting list, as it has been combined...
+                            circuit_wait[i].remove(index)
+
+                        # flag amendment to loop
+                        circuits_amended = 1
+
+                        # next connection index set
+                        break
 
                 if not circuits_amended:
                     break
 
             # when single circuit achieved...
-            if len(circuit_curr) == len(jbox_coordinates):
+            if len(circuit_made) == len(self.jbox):
                 # ... truncate connections...
-                self.connections = self.connections[:current_conns]
+                self.connections = self.connections[:made_conns]
                 # sort circuits by descending circuit length
-                self.circuits = list(circuit_curr.values())
+                self.circuits = list(circuit_made.values())
                 # ... end loop...
                 break
 
@@ -421,12 +425,13 @@ class Solver8():
         """
         # Build circuits, based on problem parameters
         self.build_circuits(
-            jbox_coordinates=self.jbox,
             n_shortest_conns=n
             )
         # Derive product of top three circuit lengths
         self.solutions["Part One"] = int(
-            np.prod([len(x) for x in self.circuits[:3]])
+            np.prod(
+                [len(x) for x in self.circuits[:3]]
+                )
             )
         # print and return
         print(f"Part One Solution:\t{self.solutions['Part One']}")
@@ -444,12 +449,14 @@ class Solver8():
         making one large circuit.
         """
         # Build circuits, based on problem parameters
-        self.build_one_circuit(
-            jbox_coordinates=self.jbox
-            )
+        self.build_one_circuit()
         # Derive product of last two connected jboxes x coordinates
         self.solutions["Part Two"] = int(
-            np.prod(self.jbox[[*self.connections[-1]]][:, 0])
+            np.prod(
+                self.jbox[
+                    [*self.connections[-1]]
+                    ][:, 0]
+                )
             )
         # print and return
         print(f"Part Two Solution:\t{self.solutions['Part Two']}")
