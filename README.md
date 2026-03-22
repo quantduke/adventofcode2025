@@ -6,5 +6,7 @@
     1) get to know the data
     2) edge cases
     3) time complexity
+    4) a picture says 1000 words
+    5) persistence
 
 back to work...
